@@ -1885,24 +1885,24 @@ void combine_selections(Context& context, SelectionList list, Func func, StringV
                                                                     list.size(), sels.size())};
                                      for (int i = 0, j = 0; i < sels.size(); ++i, ++j)
                                      {
-                                         auto smin = sels[i].min();
-                                         auto smax = sels[i].max();
-                                         auto lmin = list[j].min();
-                                         auto lmax = list[j].max();
+                                         auto smin = sels[i].min(), smax = sels[i].max();
+                                         auto lmin = list[j].min(), lmax = list[j].max();
                                          if ( smin < lmin && lmax < smax ) // split in two
                                          {
-                                             list[j].set(smin, lmin); // lmin - 1
-                                             list.push_back(Selection(lmax, smax)); // lmax + 1
+                                             list[j].set(smin, BufferCoord{lmin.line, lmin.column - 1});
+                                             list.push_back(Selection(BufferCoord{lmax.line, lmax.column + 1}, smax));
                                          }
-                                         else if ( lmin <= lmax && smax <= lmax ) // result empty
+                                         else if ( lmin <= smin && smax <= lmax ) // result empty
                                          {
                                              list.remove(j);
                                              --j;
                                          }
-                                         else if ( lmin <= smax && smin < lmin ) // cut right
-                                             list[j].set(smin, lmin); // lmin - 1
-                                         else if ( lmin <= smin && lmax < smax ) // cut left
-                                             list[j].set(lmax, smax); // lmax + 1
+                                         else if ( smin < lmin && lmin <= smax ) // cut right
+                                             list[j].set(smin, BufferCoord{lmin.line, lmin.column - 1});
+                                         else if ( smin <= lmax && lmax < smax ) // cut left
+                                             list[j].set(BufferCoord{lmax.line, lmax.column + 1}, smax);
+                                         else
+                                             list[j].set(smin, smax);
                                      }
                                      if ( list.size() == 0 )
                                          throw no_selections_remaining();
