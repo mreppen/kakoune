@@ -1801,6 +1801,7 @@ enum class CombineOp
     Append,
     Union,
     Intersect,
+    Subtract,
     SelectLeftmostCursor,
     SelectRightmostCursor,
     SelectLongest,
@@ -1814,6 +1815,7 @@ CombineOp key_to_combine_op(Key key)
         case 'a': return CombineOp::Append;
         case 'u': return CombineOp::Union;
         case 'i': return CombineOp::Intersect;
+        case 's': return CombineOp::Subtract;
         case '<': return CombineOp::SelectLeftmostCursor;
         case '>': return CombineOp::SelectRightmostCursor;
         case '+': return CombineOp::SelectLongest;
@@ -1876,6 +1878,35 @@ void combine_selections(Context& context, SelectionList list, Func func, StringV
                                      list.set_main_index(main_index);
                                      list.sort_and_merge_overlapping();
                                  }
+                                 else if (op == CombineOp::Subtract)
+                                 {
+                                     if (list.size() != sels.size())
+                                         throw runtime_error{format("the two selection lists don't have the same number of elements ({} vs {})",
+                                                                    list.size(), sels.size())};
+                                     for (int i = 0, j = 0; i < sels.size(); ++i, ++j)
+                                     {
+                                         auto smin = sels[i].min();
+                                         auto smax = sels[i].max();
+                                         auto lmin = list[j].min();
+                                         auto lmax = list[j].max();
+                                         if ( smin < lmin && lmax < smax ) // split in two
+                                         {
+                                             list[j].set(smin, lmin); // lmin - 1
+                                             list.push_back(Selection(lmax, smax)); // lmax + 1
+                                         }
+                                         else if ( lmin <= lmax && smax <= lmax ) // result empty
+                                         {
+                                             list.remove(j);
+                                             --j;
+                                         }
+                                         else if ( lmin <= smax && smin < lmin ) // cut right
+                                             list[j].set(smin, lmin); // lmin - 1
+                                         else if ( lmin <= smin && lmax < smax ) // cut left
+                                             list[j].set(lmax, smax); // lmax + 1
+                                     }
+                                     if ( list.size() == 0 )
+                                         throw no_selections_remaining();
+                                 }
                                  else
                                  {
                                      if (list.size() != sels.size())
@@ -1890,6 +1921,7 @@ void combine_selections(Context& context, SelectionList list, Func func, StringV
                              "'a': append lists\n"
                              "'u': union\n"
                              "'i': intersection\n"
+                             "'s': subtract from selection\n"
                              "'<': select leftmost cursor\n"
                              "'>': select rightmost cursor\n"
                              "'+': select longest\n"
