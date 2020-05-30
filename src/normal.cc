@@ -1880,32 +1880,36 @@ void combine_selections(Context& context, SelectionList list, Func func, StringV
                                  }
                                  else if (op == CombineOp::Subtract)
                                  {
-                                     if (list.size() != sels.size())
-                                         throw runtime_error{format("the two selection lists don't have the same number of elements ({} vs {})",
-                                                                    list.size(), sels.size())};
-                                     for (int i = 0, j = 0; i < sels.size(); ++i, ++j)
+                                     Vector<Selection> res;
+                                     res.reserve(sels.size());
+                                     for (auto& sel : sels)
+                                       res.push_back(sel);
+                                     // res = sels \ list:
+                                     for (auto& l : list)
                                      {
-                                         auto smin = sels[i].min(), smax = sels[i].max();
-                                         auto lmin = list[j].min(), lmax = list[j].max();
-                                         if ( smin < lmin && lmax < smax ) // split in two
+                                         auto lmin = l.min(), lmax = l.max();
+                                         for (int i = 0; i < res.size(); ++i)
                                          {
-                                             list[j].set(smin, BufferCoord{lmin.line, lmin.column - 1});
-                                             list.push_back(Selection(BufferCoord{lmax.line, lmax.column + 1}, smax));
+                                             auto smin = res[i].min(), smax = res[i].max();
+                                             if ( smin < lmin && lmax < smax ) // split in two
+                                             {
+                                                 res[i].set(smin, BufferCoord{lmin.line, lmin.column - 1});
+                                                 res.push_back(Selection(BufferCoord{lmax.line, lmax.column + 1}, smax));
+                                             }
+                                             else if ( lmin <= smin && smax <= lmax ) // result empty
+                                             {
+                                                 res.erase(res.begin()+i);
+                                                 --i;
+                                             }
+                                             else if ( smin < lmin && lmin <= smax ) // cut right
+                                                 res[i].set(smin, BufferCoord{lmin.line, lmin.column - 1});
+                                             else if ( smin <= lmax && lmax < smax ) // cut left
+                                                 res[i].set(BufferCoord{lmax.line, lmax.column + 1}, smax);
                                          }
-                                         else if ( lmin <= smin && smax <= lmax ) // result empty
-                                         {
-                                             list.remove(j);
-                                             --j;
-                                         }
-                                         else if ( smin < lmin && lmin <= smax ) // cut right
-                                             list[j].set(smin, BufferCoord{lmin.line, lmin.column - 1});
-                                         else if ( smin <= lmax && lmax < smax ) // cut left
-                                             list[j].set(BufferCoord{lmax.line, lmax.column + 1}, smax);
-                                         else
-                                             list[j].set(smin, smax);
                                      }
-                                     if ( list.size() == 0 )
+                                     if ( res.size() == 0 )
                                          throw no_selections_remaining();
+                                     list = res;
                                  }
                                  else
                                  {
